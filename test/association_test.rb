@@ -572,6 +572,56 @@ class AssociationTest < ActiveModel::TestCase
     end
   end
 
+  class EmbeddedCustomCollectionSerializerTest < AssociationTest
+    class CustomCollectionSerializer < ActiveModel::ArraySerializer
+
+      def serializable_hash
+        { :items => object.map { |o| @options[:each_serializer].new(o).serializable_hash } }
+      end
+
+    end
+
+    def setup
+      super
+
+      # This is required to make the serializer available in the
+      # post serializer block.
+      comment_serializer_class = @comment_serializer_class
+
+      @post_serializer_class.class_eval do
+        root :post
+        embed :ids, :include => true
+
+        has_many :comments,
+          :collection_serializer => CustomCollectionSerializer,
+          :each_serializer       => comment_serializer_class,
+          :serializer            => comment_serializer_class
+
+      end
+    end
+
+    def test_custom_collection_structure
+      post_serializer = @post_serializer_class.new(
+        @post, :include => [:comments]
+      )
+
+      json = post_serializer.as_json
+
+      assert_equal({
+        :post => {
+          :title => "New Post",
+          :body => "Body",
+          :comment_ids => [ 1 ]
+        },
+        :comments => {
+          :items => [
+            { :id => 1, :external_id => "COMM001", :body => "ZOMG A COMMENT" }
+          ]
+        }
+      }, json)
+    end
+  end
+
   class StringSerializerOption < AssociationTest
     class StringSerializer < ActiveModel::Serializer
       attributes :id, :body

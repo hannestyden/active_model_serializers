@@ -106,10 +106,10 @@ module ActiveModel
         define_include_method attr
 
         # protect inheritance chains and open classes
-        # if a serializer inherits from another OR 
+        # if a serializer inherits from another OR
         #  attributes are added later in a classes lifecycle
         # poison the cache
-        define_method :_fast_attributes do 
+        define_method :_fast_attributes do
           raise NameError
         end
 
@@ -305,7 +305,7 @@ module ActiveModel
 
     def root_name
       return false if self._root == false
-      
+
       class_name = self.class.name.demodulize.underscore.sub(/_serializer$/, '').to_sym unless self.class.name.blank?
       self._root || class_name
     end
@@ -376,6 +376,7 @@ module ActiveModel
       # unique values.
       #
       # TODO: Should passing in a Hash even be public API here?
+
       unique_values =
         if hash = options[:hash]
           if @options[:hash] == hash
@@ -416,7 +417,7 @@ module ActiveModel
         if association.embed_in_root? && hash.nil?
           raise IncludeError.new(self.class, association.name)
         elsif association.embed_in_root? && association.embeddable?
-          merge_association hash, association.root, association.serializables, unique_values
+          merge_association hash, association.root, association.serializables, unique_values, association.class.options
         end
       elsif association.embed_objects?
         node[association.key] = association.serialize
@@ -432,16 +433,26 @@ module ActiveModel
     # a unique list of all of the objects that are already in the Array. This
     # avoids the need to scan through the Array looking for entries every time
     # we want to merge a new list of values.
-    def merge_association(hash, key, serializables, unique_values)
+    def merge_association(hash, key, serializables, unique_values, more = nil)
       already_serialized = (unique_values[key] ||= {})
-      serializable_hashes = (hash[key] ||= [])
 
-      serializables.each do |serializable|
-        unless already_serialized.include? serializable.object
-          already_serialized[serializable.object] = true
-          serializable_hashes << serializable.serializable_hash
+      coll_ser_class = more[:collection_serializer]
+      szs =
+        if coll_ser_class
+          hash[key] = coll_ser_class.new(serializables, more).serializable_hash
+        else
+          serializable_hashes = (hash[key] ||= [])
+
+          serializables.each do |serializable|
+            unless already_serialized.include? serializable.object
+              already_serialized[serializable.object] = true
+              serializable_hashes ||= []
+              serializable_hashes << serializable.serializable_hash
+            end
+          end
         end
-      end
+
+
     end
 
     # Returns a hash representation of the serializable
